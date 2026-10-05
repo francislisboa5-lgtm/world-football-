@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>World Football</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f6f5;color:#172019;font:16px Arial,sans-serif}
+header{background:#087f3f;color:#fff;padding:18px 16px}.wrap{max-width:980px;margin:auto}
+.logo{font-size:28px;font-weight:900}.sub{opacity:.9;margin-top:4px}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+button{border:0;border-radius:9px;padding:11px 15px;font-weight:bold;cursor:pointer}
+.light{background:#fff;color:#087f3f}.go{background:#087f3f;color:#fff}.danger{background:#ffe8e8;color:#9d2222}
+main{max-width:980px;margin:auto;padding:16px}.card{background:#fff;padding:16px;border-radius:16px;margin:12px 0;box-shadow:0 2px 10px #0001}
+.field{width:100%;padding:12px;margin:6px 0;border:1px solid #ccd6d0;border-radius:9px;font-size:15px}
+.row{display:flex;gap:8px}.row>*{flex:1}.muted{color:#69756e;font-size:13px}.hide{display:none}
+.filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:8px}
+.match{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;text-align:center}
+.team{font-weight:800}.team img,.detail-team img{width:42px;height:42px;object-fit:contain;display:block;margin:0 auto 7px}
+.score{font-size:28px;font-weight:900}.tag{color:#087f3f;font-size:12px;font-weight:bold}
+a{color:inherit;text-decoration:none}.result-card{transition:.15s}.result-card:hover{transform:translateY(-1px)}
+.stat{display:inline-block;margin-right:16px}.detail{max-width:700px;margin:auto}.detail-team{font-weight:900;font-size:18px}.detail-score{font-size:42px;font-weight:900;text-align:center}
+@media(max-width:700px){.filters{grid-template-columns:1fr 1fr}.filters .wide{grid-column:1/-1}.match{gap:6px}.team{font-size:14px}.detail-score{font-size:36px}}
+</style>
+</head>
+<body>
+<header><div class="wrap"><div class="logo">⚽ World Football</div><div class="sub">Resultados de futebol publicados pela comunidade</div>
+<nav><button class="light" onclick="show('submit')">Publicar resultado</button><button class="light" onclick="show('login')">Administração</button></nav></div></header>
+
+<main>
+<section id="submit" class="card hide"><h2>Publicar resultado</h2><p class="muted">Não precisa de conta. O resultado será analisado pelo administrador antes de aparecer publicamente.</p>
+<form id="f">
+<input class="field" id="home" placeholder="Equipa da casa" required><input class="field" id="away" placeholder="Equipa visitante" required>
+<div class="row"><input class="field" id="hs" type="number" min="0" max="99" placeholder="Golos casa" required><input class="field" id="as" type="number" min="0" max="99" placeholder="Golos visitante" required></div>
+<input class="field" id="competition" placeholder="Campeonato / competição" required><input class="field" id="country" placeholder="País (ex.: Angola, Inglaterra)" required><input class="field" id="date" type="date" required>
+<div class="row"><input class="field" id="home_logo" placeholder="URL do logo da equipa da casa (opcional)"><input class="field" id="away_logo" placeholder="URL do logo visitante (opcional)"></div>
+<button class="go">Enviar resultado</button></form><p id="msg" class="muted"></p></section>
+
+<section id="login" class="card hide"><h2>Área do administrador</h2><form id="loginForm"><input class="field" id="user" placeholder="Utilizador" required><input class="field" id="pass" type="password" placeholder="Senha" required><button class="go">Entrar</button></form><p id="loginMsg" class="muted"></p></section>
+<section id="panel" class="card hide"><div class="row"><h2 style="margin:0;flex:1">Administração</h2><button onclick="logout()">Sair</button></div><div id="stats"></div><div id="pending"></div></section>
+
+<div id="homePage">
+<h2>Resultados publicados</h2>
+<div class="card filters"><input class="field wide" id="q" placeholder="Pesquisar equipa ou competição"><input class="field" id="fcountry" placeholder="País"><input class="field" id="fcomp" placeholder="Competição"><input class="field" id="fdate" type="date"><button class="go" onclick="load()">Filtrar</button></div>
+<div id="results"></div>
+</div>
+<div id="detailPage" class="detail hide"></div>
+</main>
+
+<script>
+let token=localStorage.getItem('wf_admin_token')||'';
+const $=id=>document.getElementById(id);
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function logo(url){return url?`<img src="${esc(url)}" alt="">`:''}
+function show(id){$(id).classList.remove('hide');if(id==='login'&&token)openPanel()}
+function resultCard(x){return `<a class="card result-card" href="?match=${x.id}"><div class="tag">${esc(x.country)} · ${esc(x.competition)} · ${esc(x.match_date)}</div><div class="match"><div class="team">${logo(x.home_logo)}${esc(x.home)}</div><div class="score">${x.home_score} — ${x.away_score}</div><div class="team">${logo(x.away_logo)}${esc(x.away)}</div></div><div class="muted" style="text-align:center;margin-top:8px">Ver jogo · ${x.views||0} visualizações</div></a>`}
+async function load(){
+ const p=new URLSearchParams(); if($('q').value)p.set('q',$('q').value);if($('fcountry').value)p.set('country',$('fcountry').value);if($('fcomp').value)p.set('competition',$('fcomp').value);if($('fdate').value)p.set('date',$('fdate').value);
+ const r=await fetch('/api/results?'+p.toString()),a=await r.json();
+ $('results').innerHTML=a.length?a.map(resultCard).join(''):'<div class="card muted">Nenhum resultado encontrado.</div>';
+}
+async function openMatch(id){
+ $('homePage').classList.add('hide');$('detailPage').classList.remove('hide');
+ const r=await fetch('/api/results/'+id); if(!r.ok){$('detailPage').innerHTML='<div class="card">Jogo não encontrado.</div>';return}
+ const x=await r.json();
+ $('detailPage').innerHTML=`<div class="card"><button onclick="back()">← Voltar</button><p class="tag">${esc(x.country)} · ${esc(x.competition)} · ${esc(x.match_date)}</p><div class="match" style="margin:35px 0"><div class="detail-team">${logo(x.home_logo)}${esc(x.home)}</div><div class="detail-score">${x.home_score}<br><span style="font-size:18px">—</span><br>${x.away_score}</div><div class="detail-team">${logo(x.away_logo)}${esc(x.away)}</div></div><div class="muted" style="text-align:center">${x.views} visualizações</div></div>`;
+}
+function back(){history.pushState({},'',location.pathname);location.reload()}
+f.onsubmit=async e=>{e.preventDefault();const b={home:home.value,away:away.value,home_score:hs.value,away_score:as.value,competition:competition.value,country:country.value,match_date:date.value,home_logo:home_logo.value,away_logo:away_logo.value};let r=await fetch('/api/results',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});let j=await r.json();msg.textContent=j.message||j.error;if(r.ok)f.reset()}
+loginForm.onsubmit=async e=>{e.preventDefault();let r=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user.value,password:pass.value})});let j=await r.json();if(r.ok){token=j.token;localStorage.setItem('wf_admin_token',token);openPanel()}else loginMsg.textContent=j.error}
+async function openPanel(){login.classList.add('hide');panel.classList.remove('hide');let [pr,sr]=await Promise.all([fetch('/api/admin/pending',{headers:{Authorization:'Bearer '+token}}),fetch('/api/admin/stats',{headers:{Authorization:'Bearer '+token}})]);if(pr.status===401){logout();return}let a=await pr.json(),s=await sr.json();stats.innerHTML=`<p><span class="stat"><b>${s.approved||0}</b> publicados</span><span class="stat"><b>${s.pending||0}</b> pendentes</span><span class="stat"><b>${s.views||0}</b> visualizações</span></p>`;pending.innerHTML=a.length?a.map(x=>`<div class="card"><b>${esc(x.home)} ${x.home_score} — ${x.away_score} ${esc(x.away)}</b><div class="muted">${esc(x.country)} · ${esc(x.competition)} · ${x.match_date}</div><p><button class="go" onclick="approve(${x.id})">Aprovar</button> <button class="danger" onclick="rejectR(${x.id})">Rejeitar</button></p></div>`).join(''):'<p class="muted">Nenhum resultado pendente.</p>'}
+async function approve(id){await fetch('/api/admin/'+id+'/approve',{method:'POST',headers:{Authorization:'Bearer '+token}});openPanel();load()}
+async function rejectR(id){await fetch('/api/admin/'+id,{method:'DELETE',headers:{Authorization:'Bearer '+token}});openPanel()}
+async function logout(){if(token)await fetch('/api/admin/logout',{method:'POST',headers:{Authorization:'Bearer '+token}});token='';localStorage.removeItem('wf_admin_token');panel.classList.add('hide');show('login')}
+const m=new URLSearchParams(location.search).get('match'); if(m)openMatch(m); else load();
+</script></body></html>
